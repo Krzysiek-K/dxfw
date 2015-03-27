@@ -1,0 +1,17 @@
+/!deploy1.bat
+/!diff.bat
+/!dir.bat
+/!sync.bat
+/!undo.bat
+/!update.bat
+/Debug
+/Release
+*.cache
+*.user
+*.sdf
+/_FOSSIL_
+*.suo
+*.ncb
+/dxtest/Debug
+/dxtest/Release
+*.lib

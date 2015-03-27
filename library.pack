@@ -1,0 +1,6 @@
+
+out packed/dxfw
++sr src/*.cpp
++hr src/*.h
++i  dxfw.h
++li dxfw*
