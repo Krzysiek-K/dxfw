@@ -240,6 +240,13 @@ void DevCanvas::SetView(base::vec2 center,float vsize)
 	v_size.x = vsize/screen_size.y*screen_size.x;
 }
 
+void DevCanvas::SetScreenBox(base::vec2 bmin,base::vec2 bmax)
+{
+	screen_size = bmax - bmin;
+	screen_center = (bmin+bmax)/2 - vec2(.5f,.5f);
+	v_size.x = v_size.y/screen_size.y*screen_size.x;
+}
+
 void DevCanvas::SelectLayer(int layer,DevTexture &tex)
 {
 	BatchKey key;

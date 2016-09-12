@@ -212,13 +212,34 @@ bool DevMesh::Save(const char *path)
 			}
 		}
 	}
+	if(arcount<=0)
+	{
+		// gather attrib ranges manually
+		int rid = 0;
+		int fpos = 0;
+		int fcount = mesh->GetNumFaces();
+		while(fpos<fcount)
+		{
+			int fstart = fpos;
+			DWORD at = abuffer[fpos++];
+			while( fpos<fcount && abuffer[fpos]==at )
+				fpos++;
+
+			TreeFileRef rf = f_ab.SerChild("Range",rid++);
+			rf.SerDword("AttribId"		,*(dword*)&at,0);
+			rf.SerDword("FaceStart"		,*(dword*)&fstart,0);
+			int tmp = fpos-fstart;
+			rf.SerDword("FaceCount"		,*(dword*)&tmp,0);
+		}
+	}
+
+	if(abuffer)
+		mesh->UnlockAttributeBuffer();
+
 
 	// save
 	FileWriterStream file(path);
 	bool ok = tfb.SaveTreeBin(&file);
-
-	if(abuffer)
-		mesh->UnlockAttributeBuffer();
 
 	Clear(false);
 
@@ -303,7 +324,7 @@ void DevMesh::GenerateSoftAdjacency(float epsilon,float normal_dot,bool normal_d
 	for(int i=0;i<icount;i++)
 		if(adjacency[i]>=0)
 		{
-			int base[2] = { (i/3) * 3, adjacency[i] * 3 };
+			int base[2] = { (i/3) * 3, int(adjacency[i] * 3) };
 			vec3 normal[2];
 
 			for(int j=0;j<2;j++)

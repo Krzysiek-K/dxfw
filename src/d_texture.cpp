@@ -275,6 +275,31 @@ bool DevTexture::LoadCube(const char *path)
 	return true;
 }
 
+bool DevTexture::LoadEmpty2D(int format, int w, int h, bool use_mipmaps)
+{
+	IDirect3DTexture9 *ttex = NULL;
+
+	Unload();
+
+	int bpp = Device::GetSurfaceSize((D3DFORMAT)format, 1, 1);
+	if( bpp<=0 )
+	{
+		assert(!"LoadEmpty2D: unsupported format specified");
+		return false;
+	}
+
+	if( FAILED(Dev->CreateTexture(w, h, use_mipmaps ? 1 : 0, use_mipmaps ? D3DUSAGE_AUTOGENMIPMAP : 0,
+		(D3DFORMAT)format, D3DPOOL_MANAGED, &ttex, NULL)) )
+		return false;
+
+	if( !ttex )
+		return false;
+
+	tex = ttex;
+
+	return true;
+}
+
 bool DevTexture::LoadRaw2D(int format,int w,int h,const void *data,bool use_mipmaps)
 {
 	IDirect3DTexture9 *ttex = NULL;
@@ -321,6 +346,38 @@ bool DevTexture::LoadRaw2D(int format,int w,int h,const void *data,bool use_mipm
 
 	ttex->GenerateMipSubLevels();
 	tex = ttex;
+
+	return true;
+}
+
+bool DevTexture::UpdateRaw2D(const void *data,int x0,int y0,int w,int h)
+{
+	if( !tex ) return false;
+	if( tex->GetType() != D3DRTYPE_TEXTURE )
+		return false;
+
+	IDirect3DTexture9 *tex2d = (IDirect3DTexture9 *)tex;
+
+	D3DSURFACE_DESC desc;
+	if( FAILED(tex2d->GetLevelDesc(0, &desc)) )
+		return false;
+
+	if( desc.Format!=D3DFMT_A8R8G8B8 && desc.Format!=D3DFMT_X8R8G8B8 )
+		return false;
+
+	D3DLOCKED_RECT lr;
+	if( FAILED(tex2d->LockRect(0, &lr, NULL, 0)) )
+		return false;
+
+	const DWORD *src = (const DWORD *)data;
+	for( int y=y0; y<y0+h; y++ )
+	{
+		DWORD *dst = (DWORD*)(((char*)lr.pBits)+lr.Pitch*y) + x0;
+		memcpy(dst,src,w*sizeof(DWORD));
+		src += w;
+	}
+
+	tex2d->UnlockRect(0);
 
 	return true;
 }

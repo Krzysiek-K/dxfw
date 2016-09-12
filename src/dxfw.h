@@ -189,7 +189,9 @@ public:
 	/** \param path path to texture being loaded
 	  * \return true on success, false on failure*/
 	bool LoadCube(const char *path);
-	bool LoadRaw2D(int format,int w,int h,const void *data,bool use_mipmaps);
+	bool LoadEmpty2D(int format, int w, int h, bool use_mipmaps);
+	bool LoadRaw2D(int format, int w, int h, const void *data, bool use_mipmaps);
+	bool UpdateRaw2D(const void *data, int x0, int y0, int w, int h);
 	bool CreateEmpty2D(int format,int w,int h,bool create_mipmaps,bool autogen_mipmaps);
 	bool BuildLookup2D(int w,int h,DWORD (*fn)(float,float),bool use_mipmaps);
 //	bool BuildLookup3D(int sx,int sy,int sz,DWORD (*fn)(float,float,float),bool use_mipmaps);
@@ -201,6 +203,8 @@ public:
 
 	IDirect3DBaseTexture9 *GetTexture() { return tex; }
 	operator IDirect3DBaseTexture9*() { return tex; }
+
+	bool IsLoaded() { return tex!=NULL; }
 
 protected:
 	IDirect3DBaseTexture9	*tex;
@@ -639,7 +643,8 @@ public:
     base::vec2 GetPos()     { return base::vec2(float(xp),float(yp)); }
     base::vec2 GetDelta()   { base::vec2 d = base::vec2(float(dx),float(dy)); dx=dy=0; return d; }
 
-    void ClampPos(int x1,int y1,int x2,int y2) { xp=max(x1,min(x2,xp)); yp=max(y1,min(y2,yp)); }
+    void ClampPos(int x1,int y1,int x2,int y2)						{ xp=max(x1,min(x2,xp)); yp=max(y1,min(y2,yp)); }
+    void ClampPosV(const base::vec2 &bmin,const base::vec2 &bmax)	{ xp=(int)max(bmin.x,min(bmax.x,xp)); yp=(int)max(bmin.y,min(bmax.y,yp)); }
 
 private:
     friend class Device;
@@ -665,10 +670,11 @@ public:
 	void EndScene();
 	bool Sync();
 	void SetResolution(int width,int height,bool fullscreen,int msaa=0);
+	void SetTopmost(bool topmost);
 	void SetAppName(const char *name);
 	void SetMinZStencilSize(int width,int height);
 	bool PumpMessages();
-	bool Init(bool soft_vp=false);
+	bool Init(bool soft_vp=false,bool hidden=false);
 	void Shutdown();
 	void ForceReset() { d3d_need_reset = true; }
 	void SetReloadTimer(int msec) { time_reload = msec/1000.f; }
@@ -686,6 +692,13 @@ public:
 	void UnregisterMessageHandler(IDevMsgHandler *dmh);
 
 	bool MainLoop();
+
+	
+	// config
+	base::Config config;
+
+	void SetConfig(const char *path);
+	
 
 	// render states
 	void SetDefaultRenderStates();
@@ -742,10 +755,7 @@ public:
     RawMouse &GetMiceData(int id)           { return mouse_data[id]; }
     int       GetMiceCount()                { return mouse_data.size(); }
 
-	// windowing
-	void SetTopmost(bool topmost);
-
-    
+   
 
 	// keyboard
 	int  ReadKey() { if(read_keys.size()<=0) return 0; int k=read_keys[0]; read_keys.erase(read_keys.begin()); return k; }
@@ -773,6 +783,9 @@ public:
 	void TickFPSCamera(base::vec3 &pos,base::vec3 &ypr,float move_speed,float sens,bool flat=true);
 	
 	void RunDebugCamera(float speed,float sens=0.2f,float zn=0.01f,float fov=70.f,bool flat=true);
+
+	void LoadCameraFromConfig();
+	void SaveCameraToConfig();
 
 
 	// format information
@@ -808,6 +821,7 @@ private:
 	int								d3d_screen_h;
 	int								d3d_msaa;
 	bool							d3d_windowed;
+	bool							d3d_hidden_window;
 	int								d3d_min_zstencil_w;
 	int								d3d_min_zstencil_h;
 	bool							set_resolution_first;
@@ -971,6 +985,7 @@ public:
 
 	// Set virtual screen (center + vertical size)
 	void SetView(base::vec2 center,float vsize);
+	void SetScreenBox(base::vec2 bmin,base::vec2 bmax);
 
 	// Coordinate conversions (virtual->screen, screen->virtual)
 	base::vec2 V2S(base::vec2 pos)

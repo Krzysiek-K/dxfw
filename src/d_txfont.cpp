@@ -38,7 +38,7 @@ DevTxFont::DevTxFont(const char *face)
 void DevTxFont::Clear()
 {
 	chars.clear();
-	chars.resize(96);
+	chars.resize(256-32);
 	memset(&chars[0],0,sizeof(CharInfo)*chars.size());
 	ker.clear();
     height = 0;
@@ -81,7 +81,7 @@ bool DevTxFont::Load(const char *name)
 				if(key=="xadvance") ch.dx = value;
 			}
 
-			if(id>=32 && id<128)
+			if(id>=32 && id<=255)
             {
 				chars[id-32] = ch;
                 if(ch.oy + ch.th > height)
@@ -114,8 +114,9 @@ int DevTxFont::ComputeLength(const char *s,const char *e)
     int len = 0, last = 0;
     while(*s && s!=e)
     {
-        if(*s>=32 && *s<128)
-            len += chars[(last=*s)-32].dx;
+		int code = (unsigned char)*s;
+        if(code>=32 && code<256)
+            len += chars[(last=code)-32].dx;
         s++;
     }
     if(last)
@@ -140,8 +141,8 @@ void DevTxFont::DrawText(DevCanvas &canvas,int l,float xp,float yp,int align,con
 
     while(*s && s!=e)
 	{
-    	int cid = *s++;
-		if(cid<32 || cid>=128)
+    	int cid = (unsigned char)(*s++);
+		if(cid<32 || cid>=256)
 			continue;
 
 		int p = cid-32;
@@ -219,15 +220,16 @@ float DevTxFont::DrawTextWrap(DevCanvas &canvas,int layer,float xp,float yp,floa
 	{
 		const char *b = s, *w = s;
 
-		int plen = 0;
+		float plen = 0;
 		while(*s && *s!='\n' && *s!='\\')
 		{
-            if(*s<=32) w = s;
-			if(*s>=32 && *s<128)
+			int code = (unsigned char)*s;
+            if(code<=32) w = s;
+			if(code>=32 && code<256)
 			{
-				int len = plen + chars[*s-32].ox + chars[*s-32].tw;
+				float len = plen + (chars[code-32].ox + chars[code-32].tw)*scale.x;
                 if(len>width) { s=w; break; }
-				plen += chars[*s-32].dx;
+				plen += chars[code-32].dx*scale.x;
 			}
 			s++;
 		}
@@ -238,7 +240,7 @@ float DevTxFont::DrawTextWrap(DevCanvas &canvas,int layer,float xp,float yp,floa
 		if(*s=='\n' || *s=='\\') s++;
 
 		if(!nodraw) DrawText(canvas,layer,xp,yp,0x00,scale,color,b,e);
-		yp += height;
+		yp += height*scale.y;
 	}
     return yp;
 }

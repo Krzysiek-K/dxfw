@@ -35,6 +35,8 @@ DevTxFont txf("data/Arial_Black_27");
 
 void Render()
 {
+	vec2 ss = Dev.GetScreenSizeV();
+
 	Dev->Clear(0,NULL,D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL,0x008000,1,0);
 
 
@@ -53,9 +55,10 @@ void Render()
     for(int i=0;i<Dev.GetMiceCount();i++)
     {
         RawMouse &m = Dev.GetMiceData(i);
+		m.ClampPosV(vec2(-.25f,-.25f)/0.01f,vec2(6.25f,4.25f)/0.01f);
         can.Draw(1,"druid")()((i ? 0x7F007F : 0x007F7F)*(m.bt_down ? 2 : 1))(m.GetPos()*.01f,.3f);
 	    
-        font.Draw(ui,0,vec2(0,3+i),1,format("%d %d",m.bt_down,m.dz).c_str());
+        font.Draw(ui,0,vec2(0,3+float(i)),1,format("%d %d %d %d",m.bt_down,m.dz,int(ss.x),int(ss.y)).c_str());
     }
     
     can.Flush();
@@ -66,7 +69,6 @@ void Render()
 	ui.Flush();
 
 
-	vec2 ss = Dev.GetScreenSizeV();
 	cfont.SetView(ss*.5f,ss.y);
 	txf.DrawTextF(cfont,0,100,100,0x11,.75f,-1,"Hello World!");
 
@@ -77,13 +79,15 @@ void Render()
 
 int WINAPI WinMain(HINSTANCE hInst,HINSTANCE hPrevInst,LPSTR pCmdLine,int nShowCmd)
 {
-	Config cfg("config.cfg");
+//	Config cfg("config.cfg");
+//	Dev.SetResolution(cfg.GetInt("screen_w",800),cfg.GetInt("screen_h",600),false);
 
-	Dev.SetResolution(cfg.GetInt("screen_w",800),cfg.GetInt("screen_h",600),false);
+	Dev.SetConfig("device.cfg");
+	Dev.SetResolution(800,600,false);
 
 	while(Dev.MainLoop())
     {
-        Dev.SetMouseCapture(true);
+     //   Dev.SetMouseCapture(true);
 		Render();
     }
 

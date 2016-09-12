@@ -316,12 +316,28 @@ void Device::SetResolution(int width,int height,bool fullscreen,int msaa)
 		return;
 	}
 
+	config.SetInt( "Windowed", d3d_windowed?1:0 );
+	config.SetInt( "ScreenWidth", width );
+	config.SetInt( "ScreenHeight", height );
+	config.SetInt( "MSAA", msaa);
+
+
 	DWORD exstyle = d3d_windowed ?	(WS_EX_APPWINDOW | WS_EX_WINDOWEDGE) :
 									(WS_EX_APPWINDOW | WS_EX_TOPMOST);
 	DWORD style = d3d_windowed ? WS_OVERLAPPEDWINDOW : WS_POPUP;
 
+	if( config.GetInt("Topmost",0) )
+		exstyle |= WS_EX_TOPMOST;
+
 	SetWindowLong( d3d_hWnd, GWL_EXSTYLE, exstyle );
 	SetWindowLong( d3d_hWnd, GWL_STYLE, style );
+
+	if( d3d_windowed )
+	{
+		if( config.GetInt("Topmost",0) )	SetWindowPos(d3d_hWnd,HWND_TOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE);
+		else								SetWindowPos(d3d_hWnd,HWND_NOTOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE);
+	}
+
 
 	//if(!fullscreen)
 	//	ChangeDisplaySettings(NULL,0);
@@ -337,6 +353,15 @@ void Device::SetResolution(int width,int height,bool fullscreen,int msaa)
 		SystemParametersInfo(SPI_GETWORKAREA,0,&pos,0);
 		pos.left = (pos.left + pos.right - width)/2;
 		pos.top = (pos.top + pos.bottom - height)/2;
+
+		// Apply config
+		int cfg_x = config.GetInt("WindowPositionX",pos.left);
+		int cfg_y = config.GetInt("WindowPositionY",pos.top);
+		if( cfg_x || cfg_y )
+		{
+			pos.left = cfg_x;
+			pos.top  = cfg_y;
+		}
 	}
 	pos.right = pos.left + width;
 	pos.bottom = pos.top + height;
@@ -346,13 +371,15 @@ void Device::SetResolution(int width,int height,bool fullscreen,int msaa)
 	//if(!fullscreen)
 	//	ChangeDisplaySettings(NULL,0);
 
-	SetWindowPos( d3d_hWnd, HWND_TOP, pos.left, pos.top,
-					pos.right - pos.left, pos.bottom - pos.top,SWP_SHOWWINDOW);
+	if( !d3d_hidden_window )
+		SetWindowPos( d3d_hWnd, HWND_TOP, pos.left, pos.top,
+						pos.right - pos.left, pos.bottom - pos.top,SWP_SHOWWINDOW);
 
 	//if(!fullscreen)
 	//	ChangeDisplaySettings(NULL,0);
 
-	ShowWindow( d3d_hWnd, SW_SHOW );
+	if( !d3d_hidden_window )
+		ShowWindow( d3d_hWnd, SW_SHOW );
 	UpdateWindow( d3d_hWnd );
 
 	d3d_need_reset = true;
@@ -370,6 +397,24 @@ void Device::SetResolution(int width,int height,bool fullscreen,int msaa)
 	POINT pt = { width/2, height/2 };
 	ClientToScreen(d3d_hWnd,&pt);
 	SetCursorPos(pt.x,pt.y);
+}
+
+void Device::SetTopmost(bool topmost)
+{
+	config.SetInt( "Topmost", topmost );
+
+	if( d3d_hWnd && d3d_windowed )
+	{
+		DWORD exstyle = GetWindowLong( d3d_hWnd, GWL_EXSTYLE );
+		
+		if(topmost)	exstyle |= WS_EX_TOPMOST;
+		else		exstyle &= ~WS_EX_TOPMOST;
+
+		SetWindowLong( d3d_hWnd, GWL_EXSTYLE, exstyle );
+
+		if( topmost )	SetWindowPos(d3d_hWnd,HWND_TOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE);
+		else			SetWindowPos(d3d_hWnd,HWND_NOTOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE);
+	}
 }
 
 
@@ -413,13 +458,20 @@ bool Device::PumpMessages()
 	return true;
 }
 
-bool Device::Init(bool soft_vp)
+bool Device::Init(bool soft_vp,bool hidden)
 {
 	const char *app_name = d3d_app_name.c_str();
 	const char *class_name = "DXFW Window Class";
 
 	// Init app name
 	d3d_app_name = app_name;
+
+	// Use config
+	d3d_windowed = ( config.GetInt( "Windowed", d3d_windowed?1:0 ) != 0 );
+	d3d_screen_w = config.GetInt( "ScreenWidth", d3d_screen_w );
+	d3d_screen_h = config.GetInt( "ScreenHeight", d3d_screen_h );
+	d3d_msaa = config.GetInt( "MSAA", d3d_msaa );
+	d3d_hidden_window = hidden;
 
 	// Register window class
 	WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, _DeviceMsgProc, 0L, 0L, 
@@ -466,7 +518,8 @@ bool Device::Init(bool soft_vp)
 	// Set device state
 	dev->SetRenderState(D3DRS_LIGHTING,FALSE);
 
-	ShowWindow( d3d_hWnd, SW_SHOW );
+	if( !d3d_hidden_window )
+		ShowWindow( d3d_hWnd, SW_SHOW );
 	UpdateWindow( d3d_hWnd );
 
 	// Create z/stencil & locking surfaces
@@ -525,6 +578,11 @@ bool Device::MainLoop()
 	return true;
 }
 
+
+void Device::SetConfig(const char *path)
+{
+	config.Load(path,true);
+}
 
 
 void Device::SetDefaultRenderStates()
@@ -944,12 +1002,6 @@ void Device::SetMouseCapture(bool capture)
     mouse_capture = capture;
 }
 
-void Device::SetTopmost(bool topmost)
-{
-	if( topmost )	SetWindowPos(d3d_hWnd,HWND_TOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE);
-	else			SetWindowPos(d3d_hWnd,HWND_NOTOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE);
-}
-
 bool Device::GetKeyStroke(int vk)
 {
     for(int i=0;i<(int)read_keys.size();i++)
@@ -1005,6 +1057,7 @@ D3DPRESENT_PARAMETERS *Device::GetPresentParameters()
 	return &d3dpp;
 }
 
+
 LRESULT Device::MsgProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 {
 	for(int i=0;i<(int)msg_handlers.size();i++)
@@ -1020,11 +1073,22 @@ LRESULT Device::MsgProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
 			PostQuitMessage( 0 );
 			return 0;
 
+		case WM_MOVE:
+			// save to config
+			config.SetInt( "WindowPositionX", LOWORD(lParam) );
+			config.SetInt( "WindowPositionY", HIWORD(lParam) );
+			break;
+
 		case WM_SIZE:
 			d3d_screen_w = LOWORD(lParam);
 			d3d_screen_h = HIWORD(lParam);
 			d3d_need_reset = true;
-		return 0;
+
+			// save to config
+			config.SetInt( "ScreenWidth", d3d_screen_w );
+			config.SetInt( "ScreenHeight", d3d_screen_h );
+			config.SetInt( "Windowed", d3d_windowed );
+			return 0;
 
 		case WM_SIZING:
 			{
@@ -1448,4 +1512,24 @@ void Device::RunDebugCamera(float speed,float sens,float zn,float fov,bool flat)
 
 	BuildCameraViewProjMatrix(&vp,debug_cam_pos,debug_cam_ypr,fov,0,zn,-1,false,true);
 	dev->SetTransform(D3DTS_PROJECTION,&vp);
+}
+
+void Device::LoadCameraFromConfig()
+{
+	debug_cam_pos.x = config.GetFloat( "CameraPosX",	debug_cam_pos.x );
+	debug_cam_pos.y = config.GetFloat( "CameraPosY",	debug_cam_pos.y	);
+	debug_cam_pos.z = config.GetFloat( "CameraPosZ",	debug_cam_pos.z );
+	debug_cam_ypr.x = config.GetFloat( "CameraYaw",		debug_cam_ypr.x );
+	debug_cam_ypr.y = config.GetFloat( "CameraPitch",	debug_cam_ypr.y );
+	debug_cam_ypr.z = config.GetFloat( "CameraRoll",	debug_cam_ypr.z );
+}
+
+void Device::SaveCameraToConfig()
+{
+	config.SetFloat( "CameraPosX",	debug_cam_pos.x );
+	config.SetFloat( "CameraPosY",	debug_cam_pos.y	);
+	config.SetFloat( "CameraPosZ",	debug_cam_pos.z );
+	config.SetFloat( "CameraYaw",	debug_cam_ypr.x );
+	config.SetFloat( "CameraPitch",	debug_cam_ypr.y );
+	config.SetFloat( "CameraRoll",	debug_cam_ypr.z );
 }
